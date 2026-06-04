@@ -1,0 +1,644 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Drawbot — Interface BLE</title>
+
+    <!-- React 18 + Babel pour JSX inline. Aucun build : ouvrir directement dans Chrome/Edge. -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <style>
+        /* Style inspiré du support TP Web Dynamique 2026 — couleurs ECE */
+        :root {
+            --ece-teal: #1f7a7a; --ece-teal-d:#144d4d;
+            --ece-orange: #f4a83d; --ece-bg: #f5f3ee;
+            --ece-card: #ffffff; --ece-text: #1c1c1c;
+            --ece-muted: #6b6b6b; --ece-border: #d9d2c5;
+            --ece-ok: #2e7d32; --ece-err: #c62828;
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0; font-family: "Segoe UI", system-ui, sans-serif;
+            background-color: var(--ece-bg); color: var(--ece-text);
+        }
+        header {
+            color: white; background-color: var(--ece-teal);
+            text-align: center; padding: 20px;
+        }
+        header h1 { margin: 0; font-size: 1.6em; }
+        header p  { margin: 6px 0 0; font-size: 0.9em; opacity: 0.85; }
+
+        nav { background-color: var(--ece-teal-d); padding: 10px 20px; }
+        nav ul {
+            list-style-type: none; margin: 0; padding: 0;
+            display: flex; gap: 20px; flex-wrap: wrap;
+        }
+        nav a { text-decoration: none; color: white; font-weight: 500; }
+        nav a:hover { color: var(--ece-orange); }
+
+        main {
+            display: flex; flex-direction: column; gap: 20px;
+            padding: 20px; max-width: 1100px; margin: 0 auto;
+        }
+        .layout { display: flex; gap: 20px; flex-wrap: wrap; }
+        section, article {
+            background-color: var(--ece-card);
+            border: 1px solid var(--ece-border);
+            border-radius: 8px; padding: 20px; flex: 1 1 320px;
+        }
+        section h2 {
+            color: var(--ece-teal); margin-top: 0;
+            border-bottom: 2px solid var(--ece-orange);
+            padding-bottom: 6px;
+        }
+        section h3 { color: var(--ece-teal-d); margin-bottom: 6px; }
+
+        button {
+            background-color: var(--ece-teal); color: white; border: none;
+            border-radius: 5px; padding: 10px 16px;
+            font-size: 1em; cursor: pointer; margin: 4px 4px 4px 0;
+        }
+        button:hover:not(:disabled) { background-color: var(--ece-teal-d); }
+        button:disabled { background-color: #b0b0b0; cursor: not-allowed; }
+        button.danger { background-color: var(--ece-err); }
+        button.accent { background-color: var(--ece-orange); color: var(--ece-text); }
+
+        input[type="number"], input[type="text"] {
+            padding: 8px; border: 1px solid var(--ece-border);
+            border-radius: 5px; font-size: 1em; width: 100px;
+        }
+        label { display: inline-block; margin-right: 10px; margin-bottom: 6px; font-weight: 500; }
+
+        .badge {
+            display: inline-block; padding: 2px 10px;
+            border-radius: 12px; font-size: 0.85em; font-weight: 600;
+        }
+        .badge-ok  { background-color: var(--ece-ok); color: white; }
+        .badge-err { background-color: var(--ece-err); color: white; }
+        .badge-warn{ background-color: var(--ece-orange); color: var(--ece-text); }
+
+        .telemetry { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+        .telemetry-item {
+            background-color: var(--ece-bg); padding: 10px; border-radius: 5px;
+        }
+        .telemetry-item .label { font-size: 0.8em; color: var(--ece-muted); }
+        .telemetry-item .value { font-size: 1.4em; font-weight: bold; color: var(--ece-teal-d); }
+
+        .console {
+            background-color: #1e1e1e; color: #d4d4d4;
+            font-family: "Consolas", monospace; font-size: 0.85em;
+            padding: 10px; border-radius: 5px;
+            height: 240px; overflow-y: auto; white-space: pre-wrap;
+        }
+        .console .err { color: #ff8a80; }
+        .console .ok  { color: #b9f6ca; }
+
+        .compass { width: 200px; height: 200px; margin: 10px auto; position: relative; }
+        .compass svg { width: 100%; height: 100%; }
+
+        footer {
+            text-align: center; padding: 14px;
+            background-color: var(--ece-teal-d); color: white; font-size: 0.85em;
+        }
+    </style>
+</head>
+<body>
+
+<div id="root"></div>
+
+<script type="text/babel">
+/* =========================================================================
+   DRAWBOT — Interface React (Web Bluetooth Low Energy)
+   -------------------------------------------------------------------------
+   Architecture GATT côté firmware :
+     Service "Drawbot" (UUID ace0...)
+       ├── CMD  (WRITE)  — PC écrit les commandes texte
+       └── TLM  (NOTIFY) — Robot pousse télémétrie + logs
+========================================================================= */
+
+const { useState, useEffect, useRef, useCallback } = React;
+
+// UUIDs définis dans le firmware
+const SERVICE_UUID  = "0000ace0-1234-5678-1234-56789abcdef0";
+const CMD_CHAR_UUID = "0000ace1-1234-5678-1234-56789abcdef0";
+const TLM_CHAR_UUID = "0000ace2-1234-5678-1234-56789abcdef0";
+
+// =========================================================================
+// 1. HOOK Web Bluetooth — gestion de la connexion GATT + envoi/notification
+// =========================================================================
+function useBluetooth() {
+    const [connected, setConnected]   = useState(false);
+    const [error, setError]           = useState("");
+    const [deviceName, setDeviceName] = useState("");
+
+    const deviceRef  = useRef(null);
+    const cmdRef     = useRef(null);   // BluetoothRemoteGATTCharacteristic CMD (write)
+    const tlmRef     = useRef(null);   // BluetoothRemoteGATTCharacteristic TLM (notify)
+    const lineListeners = useRef(new Set());
+    const rxBuffer   = useRef("");
+    const encoder    = useRef(new TextEncoder());
+    const decoder    = useRef(new TextDecoder());
+
+    const supported = "bluetooth" in navigator;
+
+    const handleNotification = useCallback((event) => {
+        const value = event.target.value;            // DataView
+        const text = decoder.current.decode(value);
+        rxBuffer.current += text;
+        let idx;
+        while ((idx = rxBuffer.current.indexOf("\n")) !== -1) {
+            const line = rxBuffer.current.slice(0, idx).trim();
+            rxBuffer.current = rxBuffer.current.slice(idx + 1);
+            if (line) lineListeners.current.forEach(fn => fn(line));
+        }
+    }, []);
+
+    const onDisconnected = useCallback(() => {
+        setConnected(false);
+        setDeviceName("");
+        cmdRef.current = null;
+        tlmRef.current = null;
+    }, []);
+
+    const connect = useCallback(async () => {
+        setError("");
+        if (!supported) {
+            setError("Web Bluetooth non supporté. Utiliser Chrome ou Edge sur ordinateur.");
+            return;
+        }
+        try {
+            // 1. Demander un device qui annonce notre service
+            const device = await navigator.bluetooth.requestDevice({
+                filters: [{ services: [SERVICE_UUID] }],
+                // alternative: { namePrefix: "Drawbot" }
+            });
+            deviceRef.current = device;
+            setDeviceName(device.name || "Drawbot");
+
+            device.addEventListener("gattserverdisconnected", onDisconnected);
+
+            // 2. Se connecter au serveur GATT
+            const server = await device.gatt.connect();
+
+            // 3. Obtenir le service et les caractéristiques
+            const service = await server.getPrimaryService(SERVICE_UUID);
+            cmdRef.current = await service.getCharacteristic(CMD_CHAR_UUID);
+            tlmRef.current = await service.getCharacteristic(TLM_CHAR_UUID);
+
+            // 4. S'abonner aux notifications de télémétrie
+            await tlmRef.current.startNotifications();
+            tlmRef.current.addEventListener("characteristicvaluechanged",
+                                            handleNotification);
+
+            setConnected(true);
+        } catch (e) {
+            setError(e.message || String(e));
+            setConnected(false);
+        }
+    }, [supported, handleNotification, onDisconnected]);
+
+    const disconnect = useCallback(async () => {
+        try {
+            if (deviceRef.current && deviceRef.current.gatt.connected) {
+                await deviceRef.current.gatt.disconnect();
+            }
+        } catch (e) {}
+        onDisconnected();
+    }, [onDisconnected]);
+
+    const send = useCallback(async (cmd) => {
+        if (!cmdRef.current) return;
+        try {
+            const data = encoder.current.encode(cmd + "\n");
+            // writeValueWithoutResponse est plus rapide; fallback sur write si non supporté
+            if (cmdRef.current.writeValueWithoutResponse) {
+                await cmdRef.current.writeValueWithoutResponse(data);
+            } else {
+                await cmdRef.current.writeValue(data);
+            }
+        } catch (e) {
+            console.error("BLE write error:", e);
+        }
+    }, []);
+
+    const subscribe = useCallback((fn) => {
+        lineListeners.current.add(fn);
+        return () => lineListeners.current.delete(fn);
+    }, []);
+
+    return { supported, connected, deviceName, error,
+             connect, disconnect, send, subscribe };
+}
+
+// =========================================================================
+// 2. COMPOSANT — Bandeau de connexion
+// =========================================================================
+function ConnectionPanel({ ble }) {
+    return (
+        <section>
+            <h2>1. Connexion Bluetooth Low Energy</h2>
+            <p style={{margin:"4px 0 10px"}}>
+                {ble.connected
+                    ? <span className="badge badge-ok">Connecté à {ble.deviceName}</span>
+                    : <span className="badge badge-err">Déconnecté</span>}
+                {!ble.supported && (
+                    <span className="badge badge-warn" style={{marginLeft:8}}>
+                        Web Bluetooth non supporté — utiliser Chrome/Edge
+                    </span>
+                )}
+            </p>
+            {ble.error && <p style={{color:"#c62828"}}>{ble.error}</p>}
+            {!ble.connected ? (
+                <button onClick={ble.connect} disabled={!ble.supported}>
+                    Scanner et se connecter au Drawbot
+                </button>
+            ) : (
+                <button className="danger" onClick={ble.disconnect}>
+                    Déconnecter
+                </button>
+            )}
+            <p style={{fontSize:"0.85em", color:"var(--ece-muted)", marginTop:10}}>
+                Aucun appairage Windows nécessaire. Allume simplement le robot,
+                clique sur "Scanner", choisis "Drawbot_ECE" dans la liste et c'est tout.
+            </p>
+        </section>
+    );
+}
+
+// =========================================================================
+// 3. COMPOSANT — Boussole SVG live
+// =========================================================================
+function Compass({ heading }) {
+    return (
+        <div className="compass">
+            <svg viewBox="0 0 200 200">
+                <circle cx="100" cy="100" r="90" fill="#fafafa" stroke="#1f7a7a" strokeWidth="2"/>
+                <text x="100" y="22"  textAnchor="middle" fontWeight="bold" fill="#c62828">N</text>
+                <text x="100" y="188" textAnchor="middle" fontWeight="bold">S</text>
+                <text x="22"  y="105" textAnchor="middle" fontWeight="bold">W</text>
+                <text x="180" y="105" textAnchor="middle" fontWeight="bold">E</text>
+                <g transform={`rotate(${heading} 100 100)`}>
+                    <polygon points="100,30 108,110 100,100 92,110"
+                             fill="#c62828" stroke="#7f0000"/>
+                    <polygon points="100,170 108,100 100,110 92,100" fill="#1f7a7a"/>
+                </g>
+                <circle cx="100" cy="100" r="4" fill="#333"/>
+            </svg>
+        </div>
+    );
+}
+
+// =========================================================================
+// 4. COMPOSANT — Télémétrie
+// =========================================================================
+function TelemetryPanel({ telemetry }) {
+    return (
+        <section>
+            <h2>2. Télémétrie temps réel</h2>
+            <Compass heading={telemetry.cap} />
+            <div className="telemetry">
+                <div className="telemetry-item">
+                    <div className="label">Cap magnétique (°)</div>
+                    <div className="value">{telemetry.cap.toFixed(1)}</div>
+                </div>
+                <div className="telemetry-item">
+                    <div className="label">État</div>
+                    <div className="value" style={{fontSize:"1em"}}>{telemetry.state}</div>
+                </div>
+                <div className="telemetry-item">
+                    <div className="label">countG (ticks)</div>
+                    <div className="value">{telemetry.x.toFixed(0)}</div>
+                </div>
+                <div className="telemetry-item">
+                    <div className="label">countD (ticks)</div>
+                    <div className="value">{telemetry.y.toFixed(0)}</div>
+                </div>
+                <div className="telemetry-item">
+                    <div className="label">angleZ (°)</div>
+                    <div className="value">{telemetry.vG.toFixed(2)}</div>
+                </div>
+                <div className="telemetry-item">
+                    <div className="label">rayon (mm)</div>
+                    <div className="value">{telemetry.vD.toFixed(0)}</div>
+                </div>
+            </div>
+        </section>
+    );
+}
+
+// =========================================================================
+// 5. COMPOSANT — Séquences de dessin
+// =========================================================================
+function SequencePanel({ ble }) {
+    const [rayon, setRayon]       = useState(20);     // min 13 cm dans ce firmware
+    const [taille, setTaille]     = useState(5);
+    const [nbCarres, setNbCarres] = useState(3);
+    const disabled = !ble.connected;
+
+    return (
+        <section>
+            <h2>3. Séquences de dessin</h2>
+
+            <article style={{padding:"12px", marginBottom:"10px",
+                             background:"#fafaf6", border:"1px solid #e8e2d2"}}>
+                <h3>Séquence 1 — Escalier</h3>
+                <p style={{margin:"4px 0", fontSize:"0.9em"}}>
+                    20 cm → 90° gauche → 10 cm → 90° droite → 40 cm
+                </p>
+                <button onClick={() => ble.send("SEQ1")} disabled={disabled}>
+                    Lancer SEQ1
+                </button>
+            </article>
+
+            <article style={{padding:"12px", marginBottom:"10px",
+                             background:"#fafaf6", border:"1px solid #e8e2d2"}}>
+                <h3>Séquence 2 — Cercle</h3>
+                <label>Rayon (cm, min 13) :</label>
+                <input type="number" min="13" max="40" step="1"
+                       value={rayon}
+                       onChange={e => setRayon(Number(e.target.value))} />
+                <button onClick={() => ble.send(`SEQ2:R${rayon}`)} disabled={disabled}>
+                    Tracer cercle r={rayon} cm
+                </button>
+                <p style={{margin:"4px 0", fontSize:"0.8em", color:"var(--ece-muted)"}}>
+                    Rayon minimum 13 cm (limite mécanique du robot)
+                </p>
+            </article>
+
+            <article style={{padding:"12px", marginBottom:"10px",
+                             background:"#fafaf6", border:"1px solid #e8e2d2"}}>
+                <h3>Séquence 3 — Rose des vents (Nord)</h3>
+                <p style={{margin:"4px 0", fontSize:"0.85em", color:"#c62828"}}>
+                    ⚠ Éloigner aimants/téléphones/écrans du robot
+                </p>
+                <button onClick={() => ble.send("SEQ3")} disabled={disabled}>
+                    Lancer SEQ3
+                </button>
+            </article>
+
+            <article style={{padding:"12px",
+                             background:"#fffaf0", border:"1px solid #f4d6a8"}}>
+                <h3>FA1 — Carrés circonscrits (bonus)</h3>
+                <label>Côté initial (cm) :</label>
+                <input type="number" min="2" max="20" step="0.5"
+                       value={taille}
+                       onChange={e => setTaille(Number(e.target.value))} />
+                <label style={{marginLeft:8}}>Nombre :</label>
+                <input type="number" min="1" max="10"
+                       value={nbCarres}
+                       onChange={e => setNbCarres(Number(e.target.value))} />
+                <br/>
+                <button className="accent"
+                        onClick={() => ble.send(`FA1:L${taille}:N${nbCarres}`)}
+                        disabled={disabled}>
+                    Lancer FA1
+                </button>
+            </article>
+
+            <button className="danger"
+                    style={{marginTop:14, fontSize:"1.1em"}}
+                    onClick={() => ble.send("STOP")}
+                    disabled={disabled}>
+                ⛔ ARRÊT D'URGENCE
+            </button>
+        </section>
+    );
+}
+
+// =========================================================================
+// 6. COMPOSANT — Calibrages
+// =========================================================================
+function CalibrationPanel({ ble }) {
+    const disabled = !ble.connected;
+    return (
+        <section>
+            <h2>4. Calibrages capteurs</h2>
+            <p style={{fontSize:"0.9em"}}>
+                Le calibrage gyro est fait automatiquement au boot (robot immobile).
+                Le calibrage magnétomètre est manuel.
+            </p>
+            <button onClick={() => ble.send("CAL:GYRO")} disabled={disabled}>
+                Recalibrer le gyroscope (10 s immobile)
+            </button>
+            <button onClick={() => ble.send("CAL:MAG")} disabled={disabled}>
+                Calibrer le magnétomètre (tourner 360° à la main)
+            </button>
+            <button onClick={() => ble.send("STATUS")} disabled={disabled}>
+                Demander l'état
+            </button>
+            <button onClick={() => ble.send("PING")} disabled={disabled}>
+                Ping
+            </button>
+        </section>
+    );
+}
+
+// =========================================================================
+// 6 bis. COMPOSANT — Tests unitaires (les 12 tests du firmware)
+// =========================================================================
+const TESTS_LIST = [
+    { id: 0,  nom: "Sens roue droite" },
+    { id: 1,  nom: "Sens roue gauche" },
+    { id: 2,  nom: "Coupure moteur" },
+    { id: 3,  nom: "Seuil démarrage D" },
+    { id: 4,  nom: "Seuil démarrage G" },
+    { id: 5,  nom: "Encodeurs" },
+    { id: 6,  nom: "Crans par tour (tourner la roue à la main 5s)" },
+    { id: 7,  nom: "Gyroscope (bouger le robot 3s)" },
+    { id: 8,  nom: "Dérive gyro 10s (immobile)" },
+    { id: 9,  nom: "Trajectoire droite 1m" },
+    { id: 10, nom: "Reproductibilité pivot 90° (3 essais)" },
+    { id: 11, nom: "Cercle 20cm retour départ" },
+];
+
+function DiagnosticPanel({ ble }) {
+    const disabled = !ble.connected;
+    return (
+        <section>
+            <h2>4 bis. Tests unitaires</h2>
+            <p style={{fontSize:"0.85em", color:"var(--ece-muted)"}}>
+                Lance les tests du firmware un par un. Le résultat (PASS/FAIL)
+                apparaît dans la console BLE.
+            </p>
+            <div style={{display:"grid", gridTemplateColumns:"1fr 1fr", gap:6}}>
+                {TESTS_LIST.map(t => (
+                    <button key={t.id}
+                            onClick={() => ble.send(`TEST:${t.id}`)}
+                            disabled={disabled}
+                            style={{fontSize:"0.85em", textAlign:"left"}}>
+                        {t.id} — {t.nom}
+                    </button>
+                ))}
+            </div>
+            <hr style={{margin:"14px 0"}} />
+            <h3>Autres commandes</h3>
+            <button onClick={() => ble.send("ROULER")}        disabled={disabled}>Rouler (60 PWM)</button>
+            <button onClick={() => ble.send("AVANCE_DROIT")}  disabled={disabled}>Avance droit (PID gyro)</button>
+            <button onClick={() => ble.send("CERCLE_LENT")}   disabled={disabled}>Cercle lent (15s)</button>
+            <button onClick={() => ble.send("LED:ON")}        disabled={disabled}>LED ON</button>
+            <button onClick={() => ble.send("LED:OFF")}       disabled={disabled}>LED OFF</button>
+        </section>
+    );
+}
+
+// =========================================================================
+// 7. COMPOSANT — Réglage PID à chaud
+// =========================================================================
+function PIDPanel({ ble }) {
+    const [kp, setKp] = useState(2.0);
+    const [ki, setKi] = useState(8.0);
+    const [kd, setKd] = useState(0.02);
+    const disabled = !ble.connected;
+    return (
+        <section>
+            <h2>5. Réglage PID (vitesse roues)</h2>
+            <p style={{fontSize:"0.85em", color:"var(--ece-muted)"}}>
+                Démarche cours : commencer Kp seul, augmenter jusqu'à oscillations,
+                puis ajouter Kd, puis Ki très progressivement.
+            </p>
+            <div>
+                <label>Kp :</label>
+                <input type="number" step="0.1" value={kp}
+                       onChange={e => setKp(Number(e.target.value))} />
+                <label style={{marginLeft:10}}>Ki :</label>
+                <input type="number" step="0.1" value={ki}
+                       onChange={e => setKi(Number(e.target.value))} />
+                <label style={{marginLeft:10}}>Kd :</label>
+                <input type="number" step="0.01" value={kd}
+                       onChange={e => setKd(Number(e.target.value))} />
+            </div>
+            <button onClick={() => ble.send(`PID:KP${kp}:KI${ki}:KD${kd}`)}
+                    disabled={disabled}>
+                Appliquer
+            </button>
+        </section>
+    );
+}
+
+// =========================================================================
+// 8. COMPOSANT — Console série
+// =========================================================================
+function ConsolePanel({ lines, onClear }) {
+    const consoleRef = useRef(null);
+    useEffect(() => {
+        if (consoleRef.current) {
+            consoleRef.current.scrollTop = consoleRef.current.scrollHeight;
+        }
+    }, [lines]);
+
+    return (
+        <section>
+            <h2>6. Console BLE</h2>
+            <button onClick={onClear}>Effacer</button>
+            <div className="console" ref={consoleRef}>
+                {lines.map((l, i) => {
+                    let cls = "";
+                    if (l.startsWith("ERR")) cls = "err";
+                    if (l.startsWith("READY") || l.startsWith("DONE")
+                        || l.startsWith("PONG")) cls = "ok";
+                    return <div key={i} className={cls}>{l}</div>;
+                })}
+            </div>
+        </section>
+    );
+}
+
+// =========================================================================
+// 9. APP
+// =========================================================================
+function App() {
+    const ble = useBluetooth();
+    const [logLines, setLogLines] = useState([
+        "Drawbot — interface BLE prête.",
+        "Allume le robot puis clique sur \"Scanner et se connecter\"."
+    ]);
+    const [telemetry, setTelemetry] = useState({
+        cap: 0, x: 0, y: 0, vG: 0, vD: 0, state: "—"
+    });
+
+    useEffect(() => {
+        const off = ble.subscribe(line => {
+            if (line.startsWith("TLM,")) {
+                const parts = line.split(",");
+                if (parts.length >= 6) {
+                    setTelemetry(t => ({
+                        ...t,
+                        cap: parseFloat(parts[2]) || 0,
+                        x:   parseFloat(parts[3]) || 0,
+                        y:   parseFloat(parts[4]) || 0,
+                        vG:  parseFloat(parts[5]) || 0,
+                        vD:  parseFloat(parts[6] || "0") || 0,
+                    }));
+                }
+                return;
+            }
+            if (line.startsWith("READY"))            setTelemetry(t=>({...t,state:"READY"}));
+            else if (line.startsWith("DONE:"))       setTelemetry(t=>({...t,state:"DONE"}));
+            else if (line.startsWith("LOG:STOPPED")) setTelemetry(t=>({...t,state:"STOPPED"}));
+            else if (line.startsWith("LOG:SEQ"))     setTelemetry(t=>({...t,state:"RUNNING"}));
+
+            setLogLines(prev => {
+                const next = [...prev, line];
+                return next.length > 200 ? next.slice(-200) : next;
+            });
+        });
+        return off;
+    }, [ble]);
+
+    return (
+        <React.Fragment>
+            <header>
+                <h1>Drawbot — Interface BLE</h1>
+                <p>Systèmes Bouclés · ECE Paris · Bluetooth Low Energy (Web Bluetooth API)</p>
+            </header>
+
+            <nav>
+                <ul>
+                    <li><a href="#connexion">Connexion</a></li>
+                    <li><a href="#telemetrie">Télémétrie</a></li>
+                    <li><a href="#sequences">Séquences</a></li>
+                    <li><a href="#calibrage">Calibrage</a></li>
+                    <li><a href="#diagnostic">Diagnostic</a></li>
+                    <li><a href="#pid">PID</a></li>
+                    <li><a href="#console">Console</a></li>
+                </ul>
+            </nav>
+
+            <main>
+                <div className="layout">
+                    <div id="connexion"  style={{flex:"1 1 320px"}}>
+                        <ConnectionPanel ble={ble} />
+                    </div>
+                    <div id="telemetrie" style={{flex:"1 1 320px"}}>
+                        <TelemetryPanel telemetry={telemetry} />
+                    </div>
+                </div>
+                <div id="sequences"><SequencePanel ble={ble} /></div>
+                <div className="layout">
+                    <div id="calibrage" style={{flex:"1 1 320px"}}>
+                        <CalibrationPanel ble={ble} />
+                    </div>
+                    <div id="pid" style={{flex:"1 1 320px"}}>
+                        <PIDPanel ble={ble} />
+                    </div>
+                </div>
+                <div id="diagnostic"><DiagnosticPanel ble={ble} /></div>
+                <div id="console">
+                    <ConsolePanel lines={logLines} onClear={() => setLogLines([])} />
+                </div>
+            </main>
+
+            <footer>
+                <small>© 2026 — Projet pédagogique ECE Paris — Plateforme Gyrobot v1.2</small>
+            </footer>
+        </React.Fragment>
+    );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>
