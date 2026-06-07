@@ -1,644 +1,692 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Drawbot — Interface BLE</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Drawbot</title>
 
-    <!-- React 18 + Babel pour JSX inline. Aucun build : ouvrir directement dans Chrome/Edge. -->
-    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    :root {
+      --bg: #f3f0e8;
+      --card: #ffffff;
+      --text: #243837;
+      --muted: #697674;
+      --green: #3d706b;
+      --green-dark: #294f4c;
+      --yellow: #d7a94a;
+      --blue: #315d9b;
+      --red: #b73a3a;
+      --purple: #6b4fa3;
+      --border: #d8d1bf;
+      --shadow: 0 8px 26px rgba(0,0,0,0.10);
+    }
 
-    <style>
-        /* Style inspiré du support TP Web Dynamique 2026 — couleurs ECE */
-        :root {
-            --ece-teal: #1f7a7a; --ece-teal-d:#144d4d;
-            --ece-orange: #f4a83d; --ece-bg: #f5f3ee;
-            --ece-card: #ffffff; --ece-text: #1c1c1c;
-            --ece-muted: #6b6b6b; --ece-border: #d9d2c5;
-            --ece-ok: #2e7d32; --ece-err: #c62828;
-        }
-        * { box-sizing: border-box; }
-        body {
-            margin: 0; font-family: "Segoe UI", system-ui, sans-serif;
-            background-color: var(--ece-bg); color: var(--ece-text);
-        }
-        header {
-            color: white; background-color: var(--ece-teal);
-            text-align: center; padding: 20px;
-        }
-        header h1 { margin: 0; font-size: 1.6em; }
-        header p  { margin: 6px 0 0; font-size: 0.9em; opacity: 0.85; }
+    * {
+      box-sizing: border-box;
+    }
 
-        nav { background-color: var(--ece-teal-d); padding: 10px 20px; }
-        nav ul {
-            list-style-type: none; margin: 0; padding: 0;
-            display: flex; gap: 20px; flex-wrap: wrap;
-        }
-        nav a { text-decoration: none; color: white; font-weight: 500; }
-        nav a:hover { color: var(--ece-orange); }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Arial, Helvetica, sans-serif;
+    }
 
-        main {
-            display: flex; flex-direction: column; gap: 20px;
-            padding: 20px; max-width: 1100px; margin: 0 auto;
-        }
-        .layout { display: flex; gap: 20px; flex-wrap: wrap; }
-        section, article {
-            background-color: var(--ece-card);
-            border: 1px solid var(--ece-border);
-            border-radius: 8px; padding: 20px; flex: 1 1 320px;
-        }
-        section h2 {
-            color: var(--ece-teal); margin-top: 0;
-            border-bottom: 2px solid var(--ece-orange);
-            padding-bottom: 6px;
-        }
-        section h3 { color: var(--ece-teal-d); margin-bottom: 6px; }
+    header {
+      background: var(--green);
+      color: white;
+      text-align: center;
+      padding: 30px 16px 24px;
+    }
 
-        button {
-            background-color: var(--ece-teal); color: white; border: none;
-            border-radius: 5px; padding: 10px 16px;
-            font-size: 1em; cursor: pointer; margin: 4px 4px 4px 0;
-        }
-        button:hover:not(:disabled) { background-color: var(--ece-teal-d); }
-        button:disabled { background-color: #b0b0b0; cursor: not-allowed; }
-        button.danger { background-color: var(--ece-err); }
-        button.accent { background-color: var(--ece-orange); color: var(--ece-text); }
+    header h1 {
+      margin: 0;
+      font-size: clamp(32px, 5vw, 52px);
+      letter-spacing: 2px;
+      font-weight: 900;
+    }
 
-        input[type="number"], input[type="text"] {
-            padding: 8px; border: 1px solid var(--ece-border);
-            border-radius: 5px; font-size: 1em; width: 100px;
-        }
-        label { display: inline-block; margin-right: 10px; margin-bottom: 6px; font-weight: 500; }
+    header p {
+      margin: 8px 0 0;
+      font-size: 16px;
+      opacity: 0.92;
+    }
 
-        .badge {
-            display: inline-block; padding: 2px 10px;
-            border-radius: 12px; font-size: 0.85em; font-weight: 600;
-        }
-        .badge-ok  { background-color: var(--ece-ok); color: white; }
-        .badge-err { background-color: var(--ece-err); color: white; }
-        .badge-warn{ background-color: var(--ece-orange); color: var(--ece-text); }
+    nav {
+      background: var(--green-dark);
+      display: flex;
+      justify-content: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      padding: 12px;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
 
-        .telemetry { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
-        .telemetry-item {
-            background-color: var(--ece-bg); padding: 10px; border-radius: 5px;
-        }
-        .telemetry-item .label { font-size: 0.8em; color: var(--ece-muted); }
-        .telemetry-item .value { font-size: 1.4em; font-weight: bold; color: var(--ece-teal-d); }
+    nav button {
+      color: white;
+      background: transparent;
+      border: none;
+      padding: 12px 18px;
+      border-radius: 8px;
+      font-weight: 800;
+      cursor: pointer;
+      font-size: 15px;
+    }
 
-        .console {
-            background-color: #1e1e1e; color: #d4d4d4;
-            font-family: "Consolas", monospace; font-size: 0.85em;
-            padding: 10px; border-radius: 5px;
-            height: 240px; overflow-y: auto; white-space: pre-wrap;
-        }
-        .console .err { color: #ff8a80; }
-        .console .ok  { color: #b9f6ca; }
+    nav button.active,
+    nav button:hover {
+      background: rgba(255,255,255,0.16);
+    }
 
-        .compass { width: 200px; height: 200px; margin: 10px auto; position: relative; }
-        .compass svg { width: 100%; height: 100%; }
+    main {
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 24px;
+    }
 
-        footer {
-            text-align: center; padding: 14px;
-            background-color: var(--ece-teal-d); color: white; font-size: 0.85em;
-        }
-    </style>
+    .tab {
+      display: none;
+    }
+
+    .tab.active {
+      display: block;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 18px;
+    }
+
+    @media (max-width: 860px) {
+      .grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 22px;
+      box-shadow: var(--shadow);
+    }
+
+    .card h2 {
+      margin: 0 0 16px;
+      color: var(--green);
+      padding-bottom: 10px;
+      border-bottom: 3px solid var(--yellow);
+      font-size: 25px;
+    }
+
+    .card h3 {
+      color: var(--green-dark);
+      margin: 18px 0 8px;
+    }
+
+    .hint {
+      color: var(--muted);
+      line-height: 1.55;
+      margin: 10px 0;
+    }
+
+    .status {
+      display: inline-block;
+      padding: 10px 16px;
+      border-radius: 999px;
+      background: var(--red);
+      color: white;
+      font-weight: 900;
+      margin-bottom: 14px;
+    }
+
+    .status.ok {
+      background: #2f8f5b;
+    }
+
+    .row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: center;
+      margin: 14px 0;
+    }
+
+    button.action {
+      border: none;
+      border-radius: 9px;
+      padding: 15px 20px;
+      font-size: 16px;
+      font-weight: 900;
+      cursor: pointer;
+      color: white;
+      background: var(--green);
+      transition: 0.15s;
+    }
+
+    button.action:hover:not(:disabled) {
+      transform: translateY(-1px);
+      filter: brightness(0.95);
+    }
+
+    button.action:disabled {
+      opacity: 0.35;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    button.big {
+      font-size: 18px;
+      padding: 18px 24px;
+    }
+
+    button.yellow {
+      background: var(--yellow);
+      color: #2a1d08;
+    }
+
+    button.blue {
+      background: var(--blue);
+    }
+
+    button.purple {
+      background: var(--purple);
+    }
+
+    button.red {
+      background: var(--red);
+    }
+
+    button.dark {
+      background: var(--green-dark);
+    }
+
+    .danger {
+      background: #fff6f6;
+      border: 2px solid rgba(183,58,58,0.25);
+      border-radius: 12px;
+      padding: 14px;
+    }
+
+    .info-box {
+      background: #f7f3e7;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px;
+      line-height: 1.55;
+    }
+
+    .cmd {
+      display: inline-block;
+      font-family: Consolas, monospace;
+      background: #eee8d8;
+      color: var(--green-dark);
+      padding: 3px 7px;
+      border-radius: 5px;
+      font-weight: 900;
+    }
+
+    .metric-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 14px;
+    }
+
+    @media (max-width: 860px) {
+      .metric-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .metric {
+      background: #f1eee5;
+      border-radius: 10px;
+      padding: 14px;
+      min-height: 84px;
+    }
+
+    .metric .label {
+      color: var(--muted);
+      font-size: 14px;
+      margin-bottom: 7px;
+    }
+
+    .metric .value {
+      color: var(--green-dark);
+      font-size: 22px;
+      font-weight: 900;
+      word-break: break-word;
+    }
+
+    input {
+      border: 1px solid var(--border);
+      border-radius: 9px;
+      padding: 14px;
+      font-size: 16px;
+      min-width: 150px;
+    }
+
+    #log {
+      background: #111716;
+      color: #e4ffe9;
+      border-radius: 12px;
+      padding: 14px;
+      height: 320px;
+      overflow-y: auto;
+      font-family: Consolas, monospace;
+      font-size: 13px;
+    }
+
+    #log div {
+      margin: 5px 0;
+      white-space: pre-wrap;
+    }
+
+    .ok-text { color: #72e0a2; }
+    .err-text { color: #ff7777; }
+    .warn-text { color: #ffd166; }
+    .info-text { color: #9dccff; }
+
+    footer {
+      text-align: center;
+      color: var(--muted);
+      padding: 20px;
+      font-size: 13px;
+    }
+  </style>
 </head>
+
 <body>
+  <header>
+    <h1>DRAWBOT</h1>
+    <p>Interface escalier + cercle + rose des vents</p>
+  </header>
 
-<div id="root"></div>
+  <nav>
+    <button class="tab-button active" data-tab="connexion">Connexion</button>
+    <button class="tab-button" data-tab="commandes">Commandes</button>
+    <button class="tab-button" data-tab="rose">Rose des vents</button>
+    <button class="tab-button" data-tab="console">Console</button>
+    <button class="tab-button" data-tab="aide">Aide</button>
+  </nav>
 
-<script type="text/babel">
-/* =========================================================================
-   DRAWBOT — Interface React (Web Bluetooth Low Energy)
-   -------------------------------------------------------------------------
-   Architecture GATT côté firmware :
-     Service "Drawbot" (UUID ace0...)
-       ├── CMD  (WRITE)  — PC écrit les commandes texte
-       └── TLM  (NOTIFY) — Robot pousse télémétrie + logs
-========================================================================= */
+  <main>
+    <section id="connexion" class="tab active">
+      <div class="grid">
+        <div class="card">
+          <h2>Connexion Bluetooth</h2>
 
-const { useState, useEffect, useRef, useCallback } = React;
+          <div id="status" class="status">● Non connecté</div>
 
-// UUIDs définis dans le firmware
-const SERVICE_UUID  = "0000ace0-1234-5678-1234-56789abcdef0";
-const CMD_CHAR_UUID = "0000ace1-1234-5678-1234-56789abcdef0";
-const TLM_CHAR_UUID = "0000ace2-1234-5678-1234-56789abcdef0";
+          <div class="row">
+            <button id="btnConnect" class="action big" onclick="connectBLE()">Scanner et connecter</button>
+            <button id="btnReconnect" class="action yellow big" onclick="reconnectBLE()" disabled>Reconnecter</button>
+            <button id="btnDisconnect" class="action red big" onclick="disconnectBLE()" disabled>Déconnecter</button>
+          </div>
 
-// =========================================================================
-// 1. HOOK Web Bluetooth — gestion de la connexion GATT + envoi/notification
-// =========================================================================
-function useBluetooth() {
-    const [connected, setConnected]   = useState(false);
-    const [error, setError]           = useState("");
-    const [deviceName, setDeviceName] = useState("");
-
-    const deviceRef  = useRef(null);
-    const cmdRef     = useRef(null);   // BluetoothRemoteGATTCharacteristic CMD (write)
-    const tlmRef     = useRef(null);   // BluetoothRemoteGATTCharacteristic TLM (notify)
-    const lineListeners = useRef(new Set());
-    const rxBuffer   = useRef("");
-    const encoder    = useRef(new TextEncoder());
-    const decoder    = useRef(new TextDecoder());
-
-    const supported = "bluetooth" in navigator;
-
-    const handleNotification = useCallback((event) => {
-        const value = event.target.value;            // DataView
-        const text = decoder.current.decode(value);
-        rxBuffer.current += text;
-        let idx;
-        while ((idx = rxBuffer.current.indexOf("\n")) !== -1) {
-            const line = rxBuffer.current.slice(0, idx).trim();
-            rxBuffer.current = rxBuffer.current.slice(idx + 1);
-            if (line) lineListeners.current.forEach(fn => fn(line));
-        }
-    }, []);
-
-    const onDisconnected = useCallback(() => {
-        setConnected(false);
-        setDeviceName("");
-        cmdRef.current = null;
-        tlmRef.current = null;
-    }, []);
-
-    const connect = useCallback(async () => {
-        setError("");
-        if (!supported) {
-            setError("Web Bluetooth non supporté. Utiliser Chrome ou Edge sur ordinateur.");
-            return;
-        }
-        try {
-            // 1. Demander un device qui annonce notre service
-            const device = await navigator.bluetooth.requestDevice({
-                filters: [{ services: [SERVICE_UUID] }],
-                // alternative: { namePrefix: "Drawbot" }
-            });
-            deviceRef.current = device;
-            setDeviceName(device.name || "Drawbot");
-
-            device.addEventListener("gattserverdisconnected", onDisconnected);
-
-            // 2. Se connecter au serveur GATT
-            const server = await device.gatt.connect();
-
-            // 3. Obtenir le service et les caractéristiques
-            const service = await server.getPrimaryService(SERVICE_UUID);
-            cmdRef.current = await service.getCharacteristic(CMD_CHAR_UUID);
-            tlmRef.current = await service.getCharacteristic(TLM_CHAR_UUID);
-
-            // 4. S'abonner aux notifications de télémétrie
-            await tlmRef.current.startNotifications();
-            tlmRef.current.addEventListener("characteristicvaluechanged",
-                                            handleNotification);
-
-            setConnected(true);
-        } catch (e) {
-            setError(e.message || String(e));
-            setConnected(false);
-        }
-    }, [supported, handleNotification, onDisconnected]);
-
-    const disconnect = useCallback(async () => {
-        try {
-            if (deviceRef.current && deviceRef.current.gatt.connected) {
-                await deviceRef.current.gatt.disconnect();
-            }
-        } catch (e) {}
-        onDisconnected();
-    }, [onDisconnected]);
-
-    const send = useCallback(async (cmd) => {
-        if (!cmdRef.current) return;
-        try {
-            const data = encoder.current.encode(cmd + "\n");
-            // writeValueWithoutResponse est plus rapide; fallback sur write si non supporté
-            if (cmdRef.current.writeValueWithoutResponse) {
-                await cmdRef.current.writeValueWithoutResponse(data);
-            } else {
-                await cmdRef.current.writeValue(data);
-            }
-        } catch (e) {
-            console.error("BLE write error:", e);
-        }
-    }, []);
-
-    const subscribe = useCallback((fn) => {
-        lineListeners.current.add(fn);
-        return () => lineListeners.current.delete(fn);
-    }, []);
-
-    return { supported, connected, deviceName, error,
-             connect, disconnect, send, subscribe };
-}
-
-// =========================================================================
-// 2. COMPOSANT — Bandeau de connexion
-// =========================================================================
-function ConnectionPanel({ ble }) {
-    return (
-        <section>
-            <h2>1. Connexion Bluetooth Low Energy</h2>
-            <p style={{margin:"4px 0 10px"}}>
-                {ble.connected
-                    ? <span className="badge badge-ok">Connecté à {ble.deviceName}</span>
-                    : <span className="badge badge-err">Déconnecté</span>}
-                {!ble.supported && (
-                    <span className="badge badge-warn" style={{marginLeft:8}}>
-                        Web Bluetooth non supporté — utiliser Chrome/Edge
-                    </span>
-                )}
-            </p>
-            {ble.error && <p style={{color:"#c62828"}}>{ble.error}</p>}
-            {!ble.connected ? (
-                <button onClick={ble.connect} disabled={!ble.supported}>
-                    Scanner et se connecter au Drawbot
-                </button>
-            ) : (
-                <button className="danger" onClick={ble.disconnect}>
-                    Déconnecter
-                </button>
-            )}
-            <p style={{fontSize:"0.85em", color:"var(--ece-muted)", marginTop:10}}>
-                Aucun appairage Windows nécessaire. Allume simplement le robot,
-                clique sur "Scanner", choisis "Drawbot_ECE" dans la liste et c'est tout.
-            </p>
-        </section>
-    );
-}
-
-// =========================================================================
-// 3. COMPOSANT — Boussole SVG live
-// =========================================================================
-function Compass({ heading }) {
-    return (
-        <div className="compass">
-            <svg viewBox="0 0 200 200">
-                <circle cx="100" cy="100" r="90" fill="#fafafa" stroke="#1f7a7a" strokeWidth="2"/>
-                <text x="100" y="22"  textAnchor="middle" fontWeight="bold" fill="#c62828">N</text>
-                <text x="100" y="188" textAnchor="middle" fontWeight="bold">S</text>
-                <text x="22"  y="105" textAnchor="middle" fontWeight="bold">W</text>
-                <text x="180" y="105" textAnchor="middle" fontWeight="bold">E</text>
-                <g transform={`rotate(${heading} 100 100)`}>
-                    <polygon points="100,30 108,110 100,100 92,110"
-                             fill="#c62828" stroke="#7f0000"/>
-                    <polygon points="100,170 108,100 100,110 92,100" fill="#1f7a7a"/>
-                </g>
-                <circle cx="100" cy="100" r="4" fill="#333"/>
-            </svg>
+          <p class="hint">
+            Le robot doit apparaître avec le nom <span class="cmd">Mon_Robot</span>.
+          </p>
         </div>
-    );
-}
 
-// =========================================================================
-// 4. COMPOSANT — Télémétrie
-// =========================================================================
-function TelemetryPanel({ telemetry }) {
-    return (
-        <section>
-            <h2>2. Télémétrie temps réel</h2>
-            <Compass heading={telemetry.cap} />
-            <div className="telemetry">
-                <div className="telemetry-item">
-                    <div className="label">Cap magnétique (°)</div>
-                    <div className="value">{telemetry.cap.toFixed(1)}</div>
-                </div>
-                <div className="telemetry-item">
-                    <div className="label">État</div>
-                    <div className="value" style={{fontSize:"1em"}}>{telemetry.state}</div>
-                </div>
-                <div className="telemetry-item">
-                    <div className="label">countG (ticks)</div>
-                    <div className="value">{telemetry.x.toFixed(0)}</div>
-                </div>
-                <div className="telemetry-item">
-                    <div className="label">countD (ticks)</div>
-                    <div className="value">{telemetry.y.toFixed(0)}</div>
-                </div>
-                <div className="telemetry-item">
-                    <div className="label">angleZ (°)</div>
-                    <div className="value">{telemetry.vG.toFixed(2)}</div>
-                </div>
-                <div className="telemetry-item">
-                    <div className="label">rayon (mm)</div>
-                    <div className="value">{telemetry.vD.toFixed(0)}</div>
-                </div>
+        <div class="card">
+          <h2>État</h2>
+
+          <div class="metric-grid">
+            <div class="metric">
+              <div class="label">Robot</div>
+              <div class="value" id="deviceName">—</div>
             </div>
-        </section>
-    );
-}
 
-// =========================================================================
-// 5. COMPOSANT — Séquences de dessin
-// =========================================================================
-function SequencePanel({ ble }) {
-    const [rayon, setRayon]       = useState(20);     // min 13 cm dans ce firmware
-    const [taille, setTaille]     = useState(5);
-    const [nbCarres, setNbCarres] = useState(3);
-    const disabled = !ble.connected;
-
-    return (
-        <section>
-            <h2>3. Séquences de dessin</h2>
-
-            <article style={{padding:"12px", marginBottom:"10px",
-                             background:"#fafaf6", border:"1px solid #e8e2d2"}}>
-                <h3>Séquence 1 — Escalier</h3>
-                <p style={{margin:"4px 0", fontSize:"0.9em"}}>
-                    20 cm → 90° gauche → 10 cm → 90° droite → 40 cm
-                </p>
-                <button onClick={() => ble.send("SEQ1")} disabled={disabled}>
-                    Lancer SEQ1
-                </button>
-            </article>
-
-            <article style={{padding:"12px", marginBottom:"10px",
-                             background:"#fafaf6", border:"1px solid #e8e2d2"}}>
-                <h3>Séquence 2 — Cercle</h3>
-                <label>Rayon (cm, min 13) :</label>
-                <input type="number" min="13" max="40" step="1"
-                       value={rayon}
-                       onChange={e => setRayon(Number(e.target.value))} />
-                <button onClick={() => ble.send(`SEQ2:R${rayon}`)} disabled={disabled}>
-                    Tracer cercle r={rayon} cm
-                </button>
-                <p style={{margin:"4px 0", fontSize:"0.8em", color:"var(--ece-muted)"}}>
-                    Rayon minimum 13 cm (limite mécanique du robot)
-                </p>
-            </article>
-
-            <article style={{padding:"12px", marginBottom:"10px",
-                             background:"#fafaf6", border:"1px solid #e8e2d2"}}>
-                <h3>Séquence 3 — Rose des vents (Nord)</h3>
-                <p style={{margin:"4px 0", fontSize:"0.85em", color:"#c62828"}}>
-                    ⚠ Éloigner aimants/téléphones/écrans du robot
-                </p>
-                <button onClick={() => ble.send("SEQ3")} disabled={disabled}>
-                    Lancer SEQ3
-                </button>
-            </article>
-
-            <article style={{padding:"12px",
-                             background:"#fffaf0", border:"1px solid #f4d6a8"}}>
-                <h3>FA1 — Carrés circonscrits (bonus)</h3>
-                <label>Côté initial (cm) :</label>
-                <input type="number" min="2" max="20" step="0.5"
-                       value={taille}
-                       onChange={e => setTaille(Number(e.target.value))} />
-                <label style={{marginLeft:8}}>Nombre :</label>
-                <input type="number" min="1" max="10"
-                       value={nbCarres}
-                       onChange={e => setNbCarres(Number(e.target.value))} />
-                <br/>
-                <button className="accent"
-                        onClick={() => ble.send(`FA1:L${taille}:N${nbCarres}`)}
-                        disabled={disabled}>
-                    Lancer FA1
-                </button>
-            </article>
-
-            <button className="danger"
-                    style={{marginTop:14, fontSize:"1.1em"}}
-                    onClick={() => ble.send("STOP")}
-                    disabled={disabled}>
-                ⛔ ARRÊT D'URGENCE
-            </button>
-        </section>
-    );
-}
-
-// =========================================================================
-// 6. COMPOSANT — Calibrages
-// =========================================================================
-function CalibrationPanel({ ble }) {
-    const disabled = !ble.connected;
-    return (
-        <section>
-            <h2>4. Calibrages capteurs</h2>
-            <p style={{fontSize:"0.9em"}}>
-                Le calibrage gyro est fait automatiquement au boot (robot immobile).
-                Le calibrage magnétomètre est manuel.
-            </p>
-            <button onClick={() => ble.send("CAL:GYRO")} disabled={disabled}>
-                Recalibrer le gyroscope (10 s immobile)
-            </button>
-            <button onClick={() => ble.send("CAL:MAG")} disabled={disabled}>
-                Calibrer le magnétomètre (tourner 360° à la main)
-            </button>
-            <button onClick={() => ble.send("STATUS")} disabled={disabled}>
-                Demander l'état
-            </button>
-            <button onClick={() => ble.send("PING")} disabled={disabled}>
-                Ping
-            </button>
-        </section>
-    );
-}
-
-// =========================================================================
-// 6 bis. COMPOSANT — Tests unitaires (les 12 tests du firmware)
-// =========================================================================
-const TESTS_LIST = [
-    { id: 0,  nom: "Sens roue droite" },
-    { id: 1,  nom: "Sens roue gauche" },
-    { id: 2,  nom: "Coupure moteur" },
-    { id: 3,  nom: "Seuil démarrage D" },
-    { id: 4,  nom: "Seuil démarrage G" },
-    { id: 5,  nom: "Encodeurs" },
-    { id: 6,  nom: "Crans par tour (tourner la roue à la main 5s)" },
-    { id: 7,  nom: "Gyroscope (bouger le robot 3s)" },
-    { id: 8,  nom: "Dérive gyro 10s (immobile)" },
-    { id: 9,  nom: "Trajectoire droite 1m" },
-    { id: 10, nom: "Reproductibilité pivot 90° (3 essais)" },
-    { id: 11, nom: "Cercle 20cm retour départ" },
-];
-
-function DiagnosticPanel({ ble }) {
-    const disabled = !ble.connected;
-    return (
-        <section>
-            <h2>4 bis. Tests unitaires</h2>
-            <p style={{fontSize:"0.85em", color:"var(--ece-muted)"}}>
-                Lance les tests du firmware un par un. Le résultat (PASS/FAIL)
-                apparaît dans la console BLE.
-            </p>
-            <div style={{display:"grid", gridTemplateColumns:"1fr 1fr", gap:6}}>
-                {TESTS_LIST.map(t => (
-                    <button key={t.id}
-                            onClick={() => ble.send(`TEST:${t.id}`)}
-                            disabled={disabled}
-                            style={{fontSize:"0.85em", textAlign:"left"}}>
-                        {t.id} — {t.nom}
-                    </button>
-                ))}
+            <div class="metric">
+              <div class="label">Connexion</div>
+              <div class="value" id="connectionState">OFF</div>
             </div>
-            <hr style={{margin:"14px 0"}} />
-            <h3>Autres commandes</h3>
-            <button onClick={() => ble.send("ROULER")}        disabled={disabled}>Rouler (60 PWM)</button>
-            <button onClick={() => ble.send("AVANCE_DROIT")}  disabled={disabled}>Avance droit (PID gyro)</button>
-            <button onClick={() => ble.send("CERCLE_LENT")}   disabled={disabled}>Cercle lent (15s)</button>
-            <button onClick={() => ble.send("LED:ON")}        disabled={disabled}>LED ON</button>
-            <button onClick={() => ble.send("LED:OFF")}       disabled={disabled}>LED OFF</button>
-        </section>
-    );
-}
 
-// =========================================================================
-// 7. COMPOSANT — Réglage PID à chaud
-// =========================================================================
-function PIDPanel({ ble }) {
-    const [kp, setKp] = useState(2.0);
-    const [ki, setKi] = useState(8.0);
-    const [kd, setKd] = useState(0.02);
-    const disabled = !ble.connected;
-    return (
-        <section>
-            <h2>5. Réglage PID (vitesse roues)</h2>
-            <p style={{fontSize:"0.85em", color:"var(--ece-muted)"}}>
-                Démarche cours : commencer Kp seul, augmenter jusqu'à oscillations,
-                puis ajouter Kd, puis Ki très progressivement.
-            </p>
-            <div>
-                <label>Kp :</label>
-                <input type="number" step="0.1" value={kp}
-                       onChange={e => setKp(Number(e.target.value))} />
-                <label style={{marginLeft:10}}>Ki :</label>
-                <input type="number" step="0.1" value={ki}
-                       onChange={e => setKi(Number(e.target.value))} />
-                <label style={{marginLeft:10}}>Kd :</label>
-                <input type="number" step="0.01" value={kd}
-                       onChange={e => setKd(Number(e.target.value))} />
+            <div class="metric">
+              <div class="label">Dernière commande</div>
+              <div class="value" id="lastCommand">—</div>
             </div>
-            <button onClick={() => ble.send(`PID:KP${kp}:KI${ki}:KD${kd}`)}
-                    disabled={disabled}>
-                Appliquer
-            </button>
-        </section>
-    );
-}
+          </div>
 
-// =========================================================================
-// 8. COMPOSANT — Console série
-// =========================================================================
-function ConsolePanel({ lines, onClear }) {
-    const consoleRef = useRef(null);
-    useEffect(() => {
-        if (consoleRef.current) {
-            consoleRef.current.scrollTop = consoleRef.current.scrollHeight;
+          <div class="danger" style="margin-top: 16px;">
+            <div class="row">
+              <button class="action red big need-ble" onclick="sendCommand('S')" disabled>■ STOP</button>
+              <button class="action dark need-ble" onclick="sendCommand('D')" disabled>Debug</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="commandes" class="tab">
+      <div class="grid">
+        <div class="card">
+          <h2>Séquence escalier</h2>
+
+          <p class="hint">
+            Commandes : <span class="cmd">R</span> ou <span class="cmd">E</span>.
+          </p>
+
+          <div class="row">
+            <button class="action yellow big need-ble" onclick="sendCommand('R')" disabled>▶ Lancer escalier</button>
+            <button class="action yellow need-ble" onclick="sendCommand('E')" disabled>Escalier E</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>Séquence cercle</h2>
+
+          <p class="hint">
+            Commandes : <span class="cmd">C2</span>, <span class="cmd">C5</span>,
+            <span class="cmd">C10</span>, <span class="cmd">C20</span>.
+          </p>
+
+          <div class="row">
+            <button class="action blue big need-ble" onclick="sendCommand('C2')" disabled>Cercle 2 cm</button>
+            <button class="action blue big need-ble" onclick="sendCommand('C5')" disabled>Cercle 5 cm</button>
+            <button class="action blue big need-ble" onclick="sendCommand('C10')" disabled>Cercle 10 cm</button>
+            <button class="action blue big need-ble" onclick="sendCommand('C20')" disabled>Cercle 20 cm</button>
+          </div>
+
+          <h3>Rayon personnalisé</h3>
+          <div class="row">
+            <input id="customRadius" type="number" min="2" max="20" step="1" value="10">
+            <button class="action blue need-ble" onclick="sendCustomCircle()" disabled>Envoyer C<span id="radiusPreview">10</span></button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="rose" class="tab">
+      <div class="card">
+        <h2>Séquence n°3 : rose des vents</h2>
+
+        <p class="hint">
+          La rose des vents est commandée par <span class="cmd">V</span>.
+          Pour que le N soit orienté vers le vrai Nord, mesure le cap initial du robot avec une application boussole.
+        </p>
+
+        <div class="info-box">
+          <b>Cap initial :</b><br>
+          0° = le robot est déjà dirigé vers le Nord.<br>
+          90° = le robot est dirigé vers l’Est.<br>
+          180° = le robot est dirigé vers le Sud.<br>
+          270° = le robot est dirigé vers l’Ouest.
+        </div>
+
+        <h3>Commande simple</h3>
+        <div class="row">
+          <button class="action purple big need-ble" onclick="sendCommand('V')" disabled>✦ Lancer rose des vents</button>
+          <button class="action red need-ble" onclick="sendCommand('S')" disabled>■ STOP</button>
+          <button class="action dark need-ble" onclick="sendCommand('D')" disabled>Debug</button>
+        </div>
+
+        <h3>Avec correction d’orientation Nord</h3>
+        <div class="row">
+          <input id="capRose" type="number" min="0" max="359" step="1" value="0">
+          <button class="action purple need-ble" onclick="sendCapRose()" disabled>Mémoriser A<span id="capPreview">0</span></button>
+          <button class="action purple big need-ble" onclick="sendRoseWithCap()" disabled>Lancer V<span id="capPreview2">0</span></button>
+        </div>
+
+        <p class="hint">
+          Exemple : si l’application boussole indique que l’avant du robot pointe vers 35°, mets 35 puis clique sur
+          <b>Lancer V35</b>.
+        </p>
+      </div>
+    </section>
+
+    <section id="console" class="tab">
+      <div class="card">
+        <h2>Console</h2>
+
+        <div class="row">
+          <input id="manualCommand" placeholder="Ex : R, C10, V, V35, A35, S, D">
+          <button class="action need-ble" onclick="sendManualCommand()" disabled>Envoyer</button>
+          <button class="action yellow" onclick="clearLog()">Effacer</button>
+        </div>
+
+        <div id="log"></div>
+      </div>
+    </section>
+
+    <section id="aide" class="tab">
+      <div class="card">
+        <h2>Aide rapide</h2>
+
+        <p><span class="cmd">R</span> ou <span class="cmd">E</span> : lancer l’escalier.</p>
+        <p><span class="cmd">C2</span>, <span class="cmd">C5</span>, <span class="cmd">C10</span>, <span class="cmd">C20</span> : lancer le cercle.</p>
+        <p><span class="cmd">A35</span> : mémoriser un cap initial de 35° pour la rose des vents.</p>
+        <p><span class="cmd">V</span> : lancer la rose avec le dernier cap mémorisé.</p>
+        <p><span class="cmd">V35</span> : mémoriser 35° puis lancer directement la rose.</p>
+        <p><span class="cmd">S</span> : stop général.</p>
+        <p><span class="cmd">D</span> : debug dans le moniteur série Arduino.</p>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    Interface BLE compatible avec le code Arduino des 3 séquences.
+  </footer>
+
+  <script>
+    const SERVICE_UUID = "12345678-1234-1234-1234-123456789abc";
+    const CHARACTERISTIC_UUID = "abcd1234-ab12-ab12-ab12-abcdef123456";
+    const ROBOT_NAME = "Drawbot_Escalier";
+
+    let bleDevice = null;
+    let bleCharacteristic = null;
+    let commandCount = 0;
+
+    function $(id) {
+      return document.getElementById(id);
+    }
+
+    function timeNow() {
+      return new Date().toLocaleTimeString();
+    }
+
+    function log(message, type = "info") {
+      const line = document.createElement("div");
+      line.className =
+        type === "ok" ? "ok-text" :
+        type === "err" ? "err-text" :
+        type === "warn" ? "warn-text" :
+        "info-text";
+
+      line.textContent = "[" + timeNow() + "] " + message;
+      $("log").prepend(line);
+    }
+
+    function clearLog() {
+      $("log").innerHTML = "";
+      log("Console effacée.", "info");
+    }
+
+    function setConnected(connected) {
+      $("status").textContent = connected ? "● Connecté" : "● Non connecté";
+      $("status").className = connected ? "status ok" : "status";
+
+      $("connectionState").textContent = connected ? "ON" : "OFF";
+
+      $("btnConnect").disabled = connected;
+      $("btnReconnect").disabled = connected || !bleDevice;
+      $("btnDisconnect").disabled = !connected;
+
+      document.querySelectorAll(".need-ble").forEach(btn => {
+        btn.disabled = !connected;
+      });
+    }
+
+    async function connectBLE() {
+      if (!navigator.bluetooth) {
+        log("Web Bluetooth non disponible. Utilise Chrome ou Edge.", "err");
+        return;
+      }
+
+      try {
+        log("Recherche du robot " + ROBOT_NAME + "...", "info");
+
+        bleDevice = await navigator.bluetooth.requestDevice({
+          filters: [{ name: ROBOT_NAME }],
+          optionalServices: [SERVICE_UUID]
+        });
+
+        bleDevice.addEventListener("gattserverdisconnected", onDisconnected);
+
+        await doConnect();
+      } catch (error) {
+        log("Connexion annulée ou impossible : " + error.message, "err");
+        setConnected(false);
+      }
+    }
+
+    async function doConnect() {
+      try {
+        const server = await bleDevice.gatt.connect();
+        const service = await server.getPrimaryService(SERVICE_UUID);
+        bleCharacteristic = await service.getCharacteristic(CHARACTERISTIC_UUID);
+
+        $("deviceName").textContent = bleDevice.name || ROBOT_NAME;
+
+        setConnected(true);
+        log("Connecté à " + (bleDevice.name || ROBOT_NAME) + " ✓", "ok");
+      } catch (error) {
+        bleCharacteristic = null;
+        setConnected(false);
+        log("Erreur de connexion : " + error.message, "err");
+      }
+    }
+
+    async function reconnectBLE() {
+      if (!bleDevice) {
+        log("Aucun robot mémorisé. Clique sur Scanner et connecter.", "err");
+        return;
+      }
+
+      log("Reconnexion en cours...", "warn");
+      await doConnect();
+    }
+
+    function disconnectBLE() {
+      if (bleDevice && bleDevice.gatt.connected) {
+        bleDevice.gatt.disconnect();
+      }
+
+      bleCharacteristic = null;
+      setConnected(false);
+      log("Déconnecté manuellement.", "warn");
+    }
+
+    function onDisconnected() {
+      bleCharacteristic = null;
+      setConnected(false);
+      log("Déconnexion détectée. Clique sur Reconnecter.", "warn");
+    }
+
+    async function sendCommand(command) {
+      if (!bleCharacteristic) {
+        log("Non connecté : impossible d’envoyer " + command, "err");
+        return;
+      }
+
+      try {
+        const data = new TextEncoder().encode(command);
+
+        if (bleCharacteristic.properties.writeWithoutResponse) {
+          await bleCharacteristic.writeValueWithoutResponse(data);
+        } else {
+          await bleCharacteristic.writeValue(data);
         }
-    }, [lines]);
 
-    return (
-        <section>
-            <h2>6. Console BLE</h2>
-            <button onClick={onClear}>Effacer</button>
-            <div className="console" ref={consoleRef}>
-                {lines.map((l, i) => {
-                    let cls = "";
-                    if (l.startsWith("ERR")) cls = "err";
-                    if (l.startsWith("READY") || l.startsWith("DONE")
-                        || l.startsWith("PONG")) cls = "ok";
-                    return <div key={i} className={cls}>{l}</div>;
-                })}
-            </div>
-        </section>
-    );
-}
+        commandCount++;
+        $("lastCommand").textContent = command;
 
-// =========================================================================
-// 9. APP
-// =========================================================================
-function App() {
-    const ble = useBluetooth();
-    const [logLines, setLogLines] = useState([
-        "Drawbot — interface BLE prête.",
-        "Allume le robot puis clique sur \"Scanner et se connecter\"."
-    ]);
-    const [telemetry, setTelemetry] = useState({
-        cap: 0, x: 0, y: 0, vG: 0, vD: 0, state: "—"
+        log("Commande envoyée : " + command, command === "S" ? "err" : "ok");
+      } catch (error) {
+        bleCharacteristic = null;
+        setConnected(false);
+        log("Erreur d’envoi : " + error.message, "err");
+      }
+    }
+
+    function sendCustomCircle() {
+      let radius = Number($("customRadius").value);
+
+      if (!Number.isFinite(radius)) {
+        radius = 10;
+      }
+
+      radius = Math.max(2, Math.min(20, Math.round(radius)));
+      $("customRadius").value = radius;
+
+      sendCommand("C" + radius);
+    }
+
+    function getCapRoseValue() {
+      let cap = Number($("capRose").value);
+
+      if (!Number.isFinite(cap)) {
+        cap = 0;
+      }
+
+      cap = Math.max(0, Math.min(359, Math.round(cap)));
+      $("capRose").value = cap;
+
+      return cap;
+    }
+
+    function sendCapRose() {
+      const cap = getCapRoseValue();
+      sendCommand("A" + cap);
+    }
+
+    function sendRoseWithCap() {
+      const cap = getCapRoseValue();
+      sendCommand("V" + cap);
+    }
+
+    function sendManualCommand() {
+      const command = $("manualCommand").value.trim().toUpperCase();
+
+      if (command.length === 0) {
+        return;
+      }
+
+      sendCommand(command);
+    }
+
+    $("customRadius").addEventListener("input", () => {
+      $("radiusPreview").textContent = $("customRadius").value || "10";
     });
 
-    useEffect(() => {
-        const off = ble.subscribe(line => {
-            if (line.startsWith("TLM,")) {
-                const parts = line.split(",");
-                if (parts.length >= 6) {
-                    setTelemetry(t => ({
-                        ...t,
-                        cap: parseFloat(parts[2]) || 0,
-                        x:   parseFloat(parts[3]) || 0,
-                        y:   parseFloat(parts[4]) || 0,
-                        vG:  parseFloat(parts[5]) || 0,
-                        vD:  parseFloat(parts[6] || "0") || 0,
-                    }));
-                }
-                return;
-            }
-            if (line.startsWith("READY"))            setTelemetry(t=>({...t,state:"READY"}));
-            else if (line.startsWith("DONE:"))       setTelemetry(t=>({...t,state:"DONE"}));
-            else if (line.startsWith("LOG:STOPPED")) setTelemetry(t=>({...t,state:"STOPPED"}));
-            else if (line.startsWith("LOG:SEQ"))     setTelemetry(t=>({...t,state:"RUNNING"}));
+    $("capRose").addEventListener("input", () => {
+      $("capPreview").textContent = $("capRose").value || "0";
+      $("capPreview2").textContent = $("capRose").value || "0";
+    });
 
-            setLogLines(prev => {
-                const next = [...prev, line];
-                return next.length > 200 ? next.slice(-200) : next;
-            });
-        });
-        return off;
-    }, [ble]);
+    $("manualCommand").addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        sendManualCommand();
+      }
+    });
 
-    return (
-        <React.Fragment>
-            <header>
-                <h1>Drawbot — Interface BLE</h1>
-                <p>Systèmes Bouclés · ECE Paris · Bluetooth Low Energy (Web Bluetooth API)</p>
-            </header>
+    document.querySelectorAll(".tab-button").forEach(button => {
+      button.addEventListener("click", () => {
+        document.querySelectorAll(".tab-button").forEach(b => b.classList.remove("active"));
+        document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
 
-            <nav>
-                <ul>
-                    <li><a href="#connexion">Connexion</a></li>
-                    <li><a href="#telemetrie">Télémétrie</a></li>
-                    <li><a href="#sequences">Séquences</a></li>
-                    <li><a href="#calibrage">Calibrage</a></li>
-                    <li><a href="#diagnostic">Diagnostic</a></li>
-                    <li><a href="#pid">PID</a></li>
-                    <li><a href="#console">Console</a></li>
-                </ul>
-            </nav>
+        button.classList.add("active");
+        $(button.dataset.tab).classList.add("active");
+      });
+    });
 
-            <main>
-                <div className="layout">
-                    <div id="connexion"  style={{flex:"1 1 320px"}}>
-                        <ConnectionPanel ble={ble} />
-                    </div>
-                    <div id="telemetrie" style={{flex:"1 1 320px"}}>
-                        <TelemetryPanel telemetry={telemetry} />
-                    </div>
-                </div>
-                <div id="sequences"><SequencePanel ble={ble} /></div>
-                <div className="layout">
-                    <div id="calibrage" style={{flex:"1 1 320px"}}>
-                        <CalibrationPanel ble={ble} />
-                    </div>
-                    <div id="pid" style={{flex:"1 1 320px"}}>
-                        <PIDPanel ble={ble} />
-                    </div>
-                </div>
-                <div id="diagnostic"><DiagnosticPanel ble={ble} /></div>
-                <div id="console">
-                    <ConsolePanel lines={logLines} onClear={() => setLogLines([])} />
-                </div>
-            </main>
-
-            <footer>
-                <small>© 2026 — Projet pédagogique ECE Paris — Plateforme Gyrobot v1.2</small>
-            </footer>
-        </React.Fragment>
-    );
-}
-
-ReactDOM.createRoot(document.getElementById("root")).render(<App />);
-</script>
+    setConnected(false);
+    log("Interface prête. Commandes : R, C10, V, V35, S, D.", "info");
+  </script>
 </body>
 </html>
